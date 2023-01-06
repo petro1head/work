@@ -1,11 +1,20 @@
+
+typedef struct Disc_Integ {
+  // переменные используемые внутри дискретного интегратора
+  double t_before = 0;
+  double u = 0;
+} Disc_Integ;
+
+
 // Глобальные переменные
 
 double u = 0;
 
 // переменные используемые внутри дискретного интегратора
-double t_before = 0;
+Disc_Integ integrator;
+//double t_before = 0;
 // сигнал от интегратора
-double u_integ = 0;
+//double u_integ = 0;
 
 // сигнал от реле
 double u_reley = 0;
@@ -65,8 +74,7 @@ String pc_data;
 // k - коэффициент
 // in_u - значение сигнала на входе в интегратор
 // t - текущее время
-void DiscreteIntegratorIn(double in_u, unsigned long t)
-{
+void DiscreteIntegratorIn(double in_u, unsigned long t) {
 
   // Параметры дискретного интегратора
   double K = 1;
@@ -74,118 +82,97 @@ void DiscreteIntegratorIn(double in_u, unsigned long t)
   unsigned long T = 10;
 
   // Если мы ждали больше шага дискретизации
-  if (t - t_before >= T)
-  {
+  if (t - integrator.t_before >= T) {
     // Обновляем значение интеграла
-    u_integ += in_u * K * T * 0.001;
+    integrator.u += in_u * K * T * 0.001;
     // Обновляем сохранённое время
-    t_before = t;
+    integrator.t_before = t;
   }
   // Если еще не прождали нужный шаг дискретизации
   // То ничего не делаем, и выводим предыдущий результат
 
-  u = u_integ;
+  u = integrator.u;
 }
 /* Выходная линия с интеграла */
-double DiscreteIntegratorOut()
-{
-  return u_integ;
+double DiscreteIntegratorOut() {
+  
+  return integrator.u;
 }
 
 // Summator
-void SummatorIn2(double u1, double u2)
-{
+void SummatorIn2(double u1, double u2) {
   // Значение сигнала, полученного Сумматором
 
   u = u1 + u2;
 }
 
 /* Выходная линия с сумматора */
-double SummatorOut2()
-{
+double SummatorOut2() {
   return u;
 }
-void SummatorIn3(double u1, double u2, double u3)
-{
+void SummatorIn3(double u1, double u2, double u3) {
   // Значение сигнала, полученного Сумматором
 
   u = u1 + u2 + u3;
 }
 
 /* Выходная линия с сумматора */
-double SummatorOut3()
-{
+double SummatorOut3() {
   return u;
 }
 
 /*Класс Множителя, умножает сигнал на какое-то число*/
 // Gain
-void GainIn(double in_u)
-{
+void GainIn(double in_u) {
   double multiplier = 0.1;
   u = in_u * multiplier;
 }
 
-double GainOut()
-{
+double GainOut() {
   return u;
 }
 
 /* Класс для насыщения - обрезки значений сигнала */
 // Saturation
-void SaturationIn(double in_u)
-{
+void SaturationIn(double in_u) {
   // Верхняя граница сигнала
   double upper = 0.25;
   // Нижняя граница сигнала
   double lower = -0.25;
 
-  if (in_u >= upper)
-  {
+  if (in_u >= upper) {
     u = upper;
-  }
-  else if (in_u <= lower)
-  {
+  } else if (in_u <= lower) {
     u = lower;
-  }
-  else
-  {
+  } else {
     u = in_u;
   }
 }
 
 /* выходная линия */
-double SaturationOut()
-{
+double SaturationOut() {
   return u;
 }
 
 /* Класс представляет собой Реле */
 // Relay
-void RelayIn(double in_u, double sp, double an)
-{
+void RelayIn(double in_u, double sp, double an) {
 
   // Порог срабатывания реле
   double positive = 0.125;
   double negative = -0.125;
 
-  if (sp < 0.08 && an < 0.4)
-  {
+  if (sp < 0.08 && an < 0.4) {
     positive = 0.03;
     negative = -0.03;
   }
 
   // Преобразуем сигнал либо к -1, либо 0, либо 1
-  if (in_u >= positive)
-  {
+  if (in_u >= positive) {
     u_reley = 1;
-  }
-  else if (in_u <= negative)
-  {
+  } else if (in_u <= negative) {
     u_reley = -1;
-  }
-  else
-  {
+  } else {
     // u принадлежит интервалу (negative, positive )
     u_reley = 0;
   }
@@ -194,15 +181,13 @@ void RelayIn(double in_u, double sp, double an)
 }
 
 /* Сигнал который получаем на выходе из Реле */
-double RelayOut()
-{
+double RelayOut() {
   return u_reley;
 }
 
 // Regulator
 
-void RegulatorIn(unsigned long t, double speed, double angle)
-{
+void RegulatorIn(unsigned long t, double speed, double angle) {
   SummatorIn2(-angle, -DiscreteIntegratorOut());
   GainIn(SummatorOut2());
   SaturationIn(GainOut());
@@ -212,8 +197,7 @@ void RegulatorIn(unsigned long t, double speed, double angle)
 }
 
 /* Сигнал который получаем на выходе из Регулятора */
-double RegulatorOut()
-{
+double RegulatorOut() {
   // Регулятор заканчивается Реле
   return RelayOut();
 }
@@ -221,25 +205,21 @@ double RegulatorOut()
 /* Ф от тау */
 // F_ot_tau
 //  tau - задержку на включение двигателя в [мс]
-void F_ot_tauIn(unsigned long t, double in_u)
-{
+void F_ot_tauIn(unsigned long t, double in_u) {
   // Параметр тау
   unsigned long tau = 30;
 
   // Проверяем работает ли двигатель
   // Если работает
-  if (is_engine_work)
-  {
+  if (is_engine_work) {
     // Находим время работы двигателя
     // Это текущее время минус время запуска двигателя
     unsigned long wake_time = t - t_on;
     // Если  время работы двигателя >30мс
-    if (wake_time > tau)
-    {
+    if (wake_time > tau) {
       // Нужно проверить значение сигнала
       // Если значение сигнала не равно сигналу при включении двигателя
-      if (in_u != u_tau)
-      {
+      if (in_u != u_tau) {
         // Нужно выключить двигатель
         is_engine_work = false;
         // Задаём время выключения двигателя - теущее
@@ -252,20 +232,16 @@ void F_ot_tauIn(unsigned long t, double in_u)
         u_tau = 0;
       }
     }
-  }
-  else
-  {
+  } else {
     // Двигатель не работает
     // Проверяем запускался ли он хоть раз
     // Если еще не запускался
-    if (cnt_start == 0)
-    {
+    if (cnt_start == 0) {
       // То нам не нужно вычислять время спячки двигателя
       // И как только сигнал будет не нулевой
       // Включаем двигатель
       // если текущее значение сигнала НЕ нулевое
-      if (in_u != 0)
-      {
+      if (in_u != 0) {
         // Включаем двигатель
         is_engine_work = true;
         // Увеличиваем счётчик запусков двигателей
@@ -276,14 +252,11 @@ void F_ot_tauIn(unsigned long t, double in_u)
         // - то есть текущее значенеи сигнала
         u_tau = in_u;
       }
-    }
-    else
-    {
+    } else {
       // Двигатель УЖЕ запускался
       // Нужно проверить значение сигнала
       // Если сигнал НЕ нулевой
-      if (in_u != 0)
-      {
+      if (in_u != 0) {
         // Включаем двигатель
         is_engine_work = true;
         // Увеличиваем счётчик запусков двигателей
@@ -299,16 +272,14 @@ void F_ot_tauIn(unsigned long t, double in_u)
   u = u_tau;
 }
 
-double F_ot_tauOut()
-{
+double F_ot_tauOut() {
   return u;
 }
 
 /*Класс системы на Arduino*/
 // System
 
-void SystemIn(String data)
-{
+void SystemIn(String data) {
   // data - это строка, где храниться время, скорость и угол через пробел
   // data = "t speed angle"
   // например: data = "16 3.000 4.000"
@@ -328,53 +299,45 @@ void SystemIn(String data)
   SystemRun(t, speed, angle);
 }
 
-void SystemRun(unsigned long t, double speed, double angle)
-{ // Делаем прогон через систему
+void SystemRun(unsigned long t, double speed, double angle) {  // Делаем прогон через систему
   // Передаём на вход регулятора значение времени, скорости и угла
   RegulatorIn(t, speed, angle);
   // В Ф(тау) передаём текущее время и выхлоп регулятора
   F_ot_tauIn(t, RegulatorOut());
 }
 // Что получаем на выходе из системы
-double SystemOut()
-{
+double SystemOut() {
   // Система заканчивается Ф от тау
   return F_ot_tauOut();
 }
-void outPrintln()
-{
+void outPrintln() {
   Serial.println(SystemOut());
 }
 
 
-void setup()
-{
+void setup() {
   SystemIn(pc_data);
   // задаём значения для глобальных переменых по умолчанию
- // ResetVariables();
+  // ResetVariables();
   // Настройка вывода
   // инициирует последовательное соединение
   // и задает скорость передачи данных в бит/с (бод)
   Serial.begin(115200);
   // Отправляем сигнал, что готовы к работе
   Serial.println("OK");
+ 
 }
 
-void loop()
-{
+void loop() {
   // Если не поступало команды stop
   // И можно прочитать данные из серийного порта
-  if (!isStop && Serial.available())
-  {
+  if (!isStop && Serial.available()) {
     // Получаем данные с ПК (формы QT)
     pc_data = Serial.readStringUntil('\n');
     // Если получили команду стоп
-    if (pc_data.startsWith("stop"))
-    {
+    if (pc_data.startsWith("stop")) {
       isStop = true;
-    }
-    else
-    {
+    } else {
       // Иначе обычный обмен данных
       // Передаём данные на вход нашей системе
       SystemIn(pc_data);
