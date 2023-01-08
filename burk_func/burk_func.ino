@@ -1,19 +1,19 @@
 // структура сумматора
 typedef struct Sum {
   // выходной сигнал от сумматора
-  double u_sum = 0;
+  double u = 0;
 } Sum;
 
 // структура коэффициента усиления Gain
 typedef struct Gain {
   // выходной сигнал от коэффициента усиления
-  double u_gain = 0;
+  double u = 0;
 } Gain;
 
 // структура насыщения Saturation
 typedef struct Saturation {
   // выходной сигнал от насыщения
-  double u_saturation = 0;
+  double u = 0;
 } Saturation;
 
 // структура дискретного интегратора
@@ -21,14 +21,14 @@ typedef struct Disc_Integ {
   // переменные используемые внутри дискретного интегратора
   double t_before = 0;
   // выходной сигнал от дискретного интегратора
-  double u_integ = 0;
+  double u = 0;
 
 } Disc_Integ;
 
 // структура реле
 typedef struct Relay {
   // сигнал от реле
-  double u_relay = 0;
+  double u = 0;
 
 } Relay;
 
@@ -36,7 +36,7 @@ typedef struct Relay {
 typedef struct F_ot_tau {
   // переменные для тау
   // сигнал сохранённый в тау
-  double u_tau = 0;
+  double u = 0;
   // Время ВКЛючения двигателя
   unsigned long t_on = 0;
   // Время ВЫКЛючения двигателя
@@ -85,7 +85,7 @@ void discreteIntegratorIn(Disc_Integ *p_DI, double in_u, unsigned long t) {
   // Если мы ждали больше шага дискретизации
   if (t - p_DI->t_before >= T) {
     // Обновляем значение интеграла
-    p_DI->u_integ += in_u * K * T * 0.001;  // мс
+    p_DI->u += in_u * K * T * 0.001;  // мс
     // Обновляем сохранённое время
     p_DI->t_before = t;
   }
@@ -97,20 +97,20 @@ void discreteIntegratorIn(Disc_Integ *p_DI, double in_u, unsigned long t) {
 // Summator
 void summatorIn2(Sum *pSum, double u1, double u2) {
   // Значение сигнала, полученного Сумматором
-  pSum->u_sum = u1 + u2;
+  pSum->u = u1 + u2;
 }
 
 
 void summatorIn3(Sum *pSum, double u1, double u2, double u3) {
   // Значение сигнала, полученного Сумматором
-  pSum->u_sum = u1 + u2 + u3;
+  pSum->u = u1 + u2 + u3;
 }
 
 
 // Gain
 void gainIn(Gain *pG, double in_u) {
   double multiplier = 0.1;
-  pG->u_gain = in_u * multiplier;
+  pG->u = in_u * multiplier;
 }
 
 
@@ -122,11 +122,11 @@ void saturationIn(Saturation *pSat, double in_u) {
   double lower = -0.25;
 
   if (in_u >= upper) {
-    pSat->u_saturation = upper;
+    pSat->u = upper;
   } else if (in_u <= lower) {
-    pSat->u_saturation = lower;
+    pSat->u = lower;
   } else {
-    pSat->u_saturation = in_u;
+    pSat->u = in_u;
   }
 }
 
@@ -144,24 +144,24 @@ void relayIn(Relay *pR, double in_u, double sp, double an) {
 
   // Преобразуем сигнал либо к -1, либо 0, либо 1
   if (in_u >= positive) {
-    pR->u_relay = 1;
+    pR->u = 1;
   } else if (in_u <= negative) {
-    pR->u_relay = -1;
+    pR->u = -1;
   } else {
     // u принадлежит интервалу (negative, positive )
-    pR->u_relay = 0;
+    pR->u= 0;
   }
 }
 
 // Regulator
 
 void regulatorIn(unsigned long t, double speed, double angle) {
-  summatorIn2(&sum2, -angle, -integrator.u_integ);
-  gainIn(&gain,sum2.u_sum);
-  saturationIn(&sat,gain.u_gain);
-  summatorIn3(&sum3, -speed,sat.u_saturation ,-relay.u_relay);
-  discreteIntegratorIn(&integrator,sum3.u_sum , t);
-  relayIn(&relay, integrator.u_integ, speed, angle);
+  summatorIn2(&sum2, -angle, -integrator.u);
+  gainIn(&gain,sum2.u);
+  saturationIn(&sat,gain.u);
+  summatorIn3(&sum3, -speed, sat.u ,-relay.u);
+  discreteIntegratorIn(&integrator,sum3.u, t);
+  relayIn(&relay, integrator.u, speed, angle);
 }
 
 
@@ -182,7 +182,7 @@ void f_ot_tauIn(unsigned long t, double in_u) {
     if (wake_time > tau) {
       // Нужно проверить значение сигнала
       // Если значение сигнала не равно сигналу при включении двигателя
-      if (in_u != ft.u_tau) {
+      if (in_u != ft.u) {
         // Нужно выключить двигатель
         ft.is_engine_work = false;
         // Задаём время выключения двигателя - теущее
@@ -192,7 +192,7 @@ void f_ot_tauIn(unsigned long t, double in_u) {
         // И должна быть его 0 фаза
         // Не может быть чтобы сигнал был,
         // например 0.5 и сразу стал -0.5
-        ft.u_tau = 0;
+        ft.u = 0;
       }
     }
   } else {
@@ -213,7 +213,7 @@ void f_ot_tauIn(unsigned long t, double in_u) {
         ft.t_on = t;
         // сохранить значение сигнала двигателя при старте
         // - то есть текущее значенеи сигнала
-        ft.u_tau = in_u;
+        ft.u = in_u;
       }
     } else {
       // Двигатель УЖЕ запускался
@@ -228,7 +228,7 @@ void f_ot_tauIn(unsigned long t, double in_u) {
         ft.t_on = t;
         // сохранить значение сигнала двигателя при старте
         // - то есть текущее значение сигнала
-        ft.u_tau = in_u;
+        ft.u = in_u;
       }
     }
   }
@@ -260,12 +260,12 @@ void SystemRun(unsigned long t, double speed, double angle) {  // Делаем �
   // Передаём на вход регулятора значение времени, скорости и угла
   regulatorIn(t, speed, angle);
   // В Ф(тау) передаём текущее время и выхлоп регулятора
-  f_ot_tauIn(t, relay.u_relay);
+  f_ot_tauIn(t, relay.u);
 }
 // Что получаем на выходе из системы
 double SystemOut() {
   // Система заканчивается Ф от тау
-  return ft.u_tau;
+  return ft.u;
 }
 void outPrintln() {
   Serial.println(SystemOut());
