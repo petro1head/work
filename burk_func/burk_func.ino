@@ -53,7 +53,8 @@ typedef struct F_ot_tau {
 // Глобальные переменные
 
 // переменная типа структуры сумматора
-Sum sum;
+Sum sum2; // суммирует 2 сигнала
+Sum sum3; // суммирует 3 сигнала
 // переменная типа структуры коэффициента усиления
 Gain gain;
 // переменная типа структуры насыщения
@@ -155,11 +156,11 @@ void relayIn(Relay *pR, double in_u, double sp, double an) {
 // Regulator
 
 void regulatorIn(unsigned long t, double speed, double angle) {
-  summatorIn2(&sum, -angle, -integrator.u_integ);
-  gainIn(&gain,sum.u_sum);
+  summatorIn2(&sum2, -angle, -integrator.u_integ);
+  gainIn(&gain,sum2.u_sum);
   saturationIn(&sat,gain.u_gain);
-  summatorIn3(&sum, -speed,sat.u_saturation ,-relay.u_relay);
-  discreteIntegratorIn(&integrator,sum.u_sum , t);
+  summatorIn3(&sum3, -speed,sat.u_saturation ,-relay.u_relay);
+  discreteIntegratorIn(&integrator,sum3.u_sum , t);
   relayIn(&relay, integrator.u_integ, speed, angle);
 }
 
