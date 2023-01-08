@@ -22,12 +22,14 @@ typedef struct Disc_Integ {
   double t_before = 0;
   // выходной сигнал от дискретного интегратора
   double u_integ = 0;
+
 } Disc_Integ;
 
 // структура реле
 typedef struct Relay {
   // сигнал от реле
   double u_relay = 0;
+
 } Relay;
 
 // структура Ф от тау
@@ -45,9 +47,11 @@ typedef struct F_ot_tau {
   // Счётчик, сколько раз запускался двигатель
   // По умолчанию 0, так как ни разу еще не запускался
   unsigned long cnt_start = 0;
+
 } F_ot_tau;
 
 // Глобальные переменные
+
 // переменная типа структуры сумматора
 Sum sum;
 // переменная типа структуры коэффициента усиления
@@ -69,7 +73,7 @@ String pc_data;
 /* Подаём на вход сигнал */
 // in_u - значение сигнала на входе в интегратор
 // t - текущее время
-void DiscreteIntegratorIn(double in_u, unsigned long t) {
+void discreteIntegratorIn(Disc_Integ *p_DI, double in_u, unsigned long t) {
 
   // Параметры дискретного интегратора
   // k - коэффициент
@@ -78,76 +82,55 @@ void DiscreteIntegratorIn(double in_u, unsigned long t) {
   unsigned long T = 10;
 
   // Если мы ждали больше шага дискретизации
-  if (t - integrator.t_before >= T) {
+  if (t - p_DI->t_before >= T) {
     // Обновляем значение интеграла
-    integrator.u_integ += in_u * K * T * 0.001;  // мс
+    p_DI->u_integ += in_u * K * T * 0.001;  // мс
     // Обновляем сохранённое время
-    integrator.t_before = t;
+    p_DI->t_before = t;
   }
   // Если еще не прождали нужный шаг дискретизации
   // То ничего не делаем, и выводим предыдущий результат
-
-  //u = integrator.u_integ;
-}
-/* Выходная линия с интеграла */
-double DiscreteIntegratorOut() {
-
-  return integrator.u_integ;
+  // выход
 }
 
 // Summator
-void SummatorIn2(double u1, double u2) {
+void summatorIn2(Sum *pSum, double u1, double u2) {
   // Значение сигнала, полученного Сумматором
-  sum.u_sum = u1 + u2;
+  pSum->u_sum = u1 + u2;
 }
 
-/* Выходная линия с сумматора */
-double SummatorOut2() {
-  return sum.u_sum;
-}
-void SummatorIn3(double u1, double u2, double u3) {
+
+void summatorIn3(Sum *pSum, double u1, double u2, double u3) {
   // Значение сигнала, полученного Сумматором
-  sum.u_sum = u1 + u2 + u3;
+  pSum->u_sum = u1 + u2 + u3;
 }
 
-/* Выходная линия с сумматора */
-double SummatorOut3() {
-  return sum.u_sum;
-}
 
 // Gain
-void GainIn(double in_u) {
+void gainIn(Gain *pG, double in_u) {
   double multiplier = 0.1;
-  gain.u_gain = in_u * multiplier;
+  pG->u_gain = in_u * multiplier;
 }
 
-double GainOut() {
-  return gain.u_gain;
-}
 
 // Saturation
-void SaturationIn(double in_u) {
+void saturationIn(Saturation *pSat, double in_u) {
   // Верхняя граница сигнала
   double upper = 0.25;
   // Нижняя граница сигнала
   double lower = -0.25;
 
   if (in_u >= upper) {
-    sat.u_saturation = upper;
+    pSat->u_saturation = upper;
   } else if (in_u <= lower) {
-    sat.u_saturation = lower;
+    pSat->u_saturation = lower;
   } else {
-    sat.u_saturation = in_u;
+    pSat->u_saturation = in_u;
   }
 }
 
-/* выходная линия */
-double SaturationOut() {
-  return sat.u_saturation;
-}
-
 // Relay
-void RelayIn(double in_u, double sp, double an) {
+void relayIn(Relay *pR, double in_u, double sp, double an) {
 
   // Порог срабатывания реле
   double positive = 0.125;
@@ -160,41 +143,31 @@ void RelayIn(double in_u, double sp, double an) {
 
   // Преобразуем сигнал либо к -1, либо 0, либо 1
   if (in_u >= positive) {
-    relay.u_relay = 1;
+    pR->u_relay = 1;
   } else if (in_u <= negative) {
-    relay.u_relay = -1;
+    pR->u_relay = -1;
   } else {
     // u принадлежит интервалу (negative, positive )
-    relay.u_relay = 0;
+    pR->u_relay = 0;
   }
-}
-
-/* Сигнал который получаем на выходе из Реле */
-double RelayOut() {
-  return relay.u_relay;
 }
 
 // Regulator
 
-void RegulatorIn(unsigned long t, double speed, double angle) {
-  SummatorIn2(-angle, -DiscreteIntegratorOut());
-  GainIn(SummatorOut2());
-  SaturationIn(GainOut());
-  SummatorIn3(SaturationOut(), -speed, -RelayOut());
-  DiscreteIntegratorIn(SummatorOut3(), t);
-  RelayIn(DiscreteIntegratorOut(), speed, angle);
+void regulatorIn(unsigned long t, double speed, double angle) {
+  summatorIn2(&sum, -angle, -integrator.u_integ);
+  gainIn(&gain,sum.u_sum);
+  saturationIn(&sat,gain.u_gain);
+  summatorIn3(&sum, -speed,sat.u_saturation ,-relay.u_relay);
+  discreteIntegratorIn(&integrator,sum.u_sum , t);
+  relayIn(&relay, integrator.u_integ, speed, angle);
 }
 
-/* Сигнал который получаем на выходе из Регулятора */
-double RegulatorOut() {
-  // Регулятор заканчивается Реле
-  return RelayOut();
-}
 
 /* Ф от тау */
 // F_ot_tau
 //  tau - задержку на включение двигателя в [мс]
-void F_ot_tauIn(unsigned long t, double in_u) {
+void f_ot_tauIn(unsigned long t, double in_u) {
   // Параметр тау
   unsigned long tau = 30;
 
@@ -260,10 +233,6 @@ void F_ot_tauIn(unsigned long t, double in_u) {
   }
 }
 
-double F_ot_tauOut() {
-  return ft.u_tau;
-}
-
 // System Система из регулятора и Ф от тау
 
 void SystemIn(String data) {
@@ -288,14 +257,14 @@ void SystemIn(String data) {
 
 void SystemRun(unsigned long t, double speed, double angle) {  // Делаем прогон через систему
   // Передаём на вход регулятора значение времени, скорости и угла
-  RegulatorIn(t, speed, angle);
+  regulatorIn(t, speed, angle);
   // В Ф(тау) передаём текущее время и выхлоп регулятора
-  F_ot_tauIn(t, RegulatorOut());
+  f_ot_tauIn(t, relay.u_relay);
 }
 // Что получаем на выходе из системы
 double SystemOut() {
   // Система заканчивается Ф от тау
-  return F_ot_tauOut();
+  return ft.u_tau;
 }
 void outPrintln() {
   Serial.println(SystemOut());
